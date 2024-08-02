@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>阵列动图生成器</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background-color: #f0f0f0;
+    }
+
+    h1 {
+      margin-top: 20px;
+    }
+
+    .container {
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      width: 90%;
+      margin: 20px;
+    }
+
+    input[type="file"],
+    input[type="number"],
+    button {
+      margin: 10px 0;
+      width: 100%;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+
+    button {
+      background-color: #007BFF;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .cell {
+      width: 50px;
+      height: 50px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background-color: #f9f9f9;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .cell:hover {
+      background-color: #e0e0e0;
+    }
+
+    #outputGif {
+      max-width: 100%;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>阵列动图生成器</h1>
+  <div class="container">
+    <input type="file" id="gifInput" accept="image/gif">
+    <label for="gridSize">网格大小 (N x N):</label>
+    <input type="number" id="gridSize" value="2" min="2" max="10">
+    <div id="gridContainer" class="grid" style="grid-template-columns: repeat(2, 1fr);"></div>
+    <button id="generateGif">生成动图</button>
+    <h2>输出动图:</h2>
+    <img id="outputGif" src="" alt="输出动图">
+  </div>
+  <script>
+    const gridSizeInput = document.getElementById('gridSize');
+    const gridContainer = document.getElementById('gridContainer');
+    const gifInput = document.getElementById('gifInput');
+    const generateGifButton = document.getElementById('generateGif');
+    const outputGif = document.getElementById('outputGif');
+
+    let gifData = '';
+    let config = {
+      pos: []
+    };
+
+    // Create initial grid
+    createGrid(2);
+
+    // Event listener for grid size change
+    gridSizeInput.addEventListener('change', () => {
+      const size = parseInt(gridSizeInput.value, 10);
+      createGrid(size);
+    });
+
+    // Event listener for file input change
+    gifInput.addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          gifData = reader.result.split(',')[1];
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Event listener for generate GIF button
+    generateGifButton.addEventListener('click', () => {
+      if (!gifData) {
+        alert('请先上传一个 GIF 文件。');
+        return;
+      }
+
+      const processedConfig = config.pos.map(row =>
+        row.map(val => {
+          switch (val) {
+            case '原图':
+              return 0;
+            case '90度':
+              return 90;
+            case '180度':
+              return 180;
+            case '270度':
+              return 270;
+            case '镜像':
+              return 1;
+            default:
+              return 0;
+          }
+        })
+      );
+
+      fetch('/api/gif', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          data: gifData,
+          config: { pos: processedConfig }
+        })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            outputGif.src = `data:image/gif;base64,${data.data}`;
+          } else {
+            alert(`错误: ${data.message}`);
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+        });
+    });
+
+    // Function to create grid
+    function createGrid(size) {
+      gridContainer.innerHTML = '';
+      gridContainer.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+      config.pos = Array.from({ length: size }, () => Array(size).fill('0'));
+
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.textContent = '原图';
+          cell.dataset.row = i;
+          cell.dataset.col = j;
+          cell.addEventListener('click', () => {
+            const options = ['原图', '镜像', '90度', '180度', '270度'];
+            const currentIndex = options.indexOf(cell.textContent);
+            const newIndex = (currentIndex + 1) % options.length;
+            cell.textContent = options[newIndex];
+            config.pos[i][j] = options[newIndex];
+          });
+          gridContainer.appendChild(cell);
+        }
+      }
+    }
+  </script>
+</body>
+
+</html>
